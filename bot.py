@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMINS = [int(x.strip()) for x in os.getenv('ADMINS', '').split(',') if x.strip()]
 
+# Проверка переменных
+if not BOT_TOKEN:
+    logger.error("❌ BOT_TOKEN не установлен!")
+if not ADMINS:
+    logger.error("❌ ADMINS не установлены!")
+
 # Инициализация базы данных
 def init_db():
     conn = sqlite3.connect('channels.db')
@@ -181,34 +187,23 @@ async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT
     )
 
 def main():
-    # Проверка обязательных переменных
-    if not BOT_TOKEN:
-        logger.error("❌ BOT_TOKEN не установлен!")
-        return
-    
-    if not ADMINS:
-        logger.error("❌ ADMINS не установлены!")
+    if not BOT_TOKEN or not ADMINS:
+        logger.error("❌ Не установлены обязательные переменные окружения!")
         return
     
     logger.info("🚀 Запуск бота...")
     logger.info(f"👑 Админы: {ADMINS}")
     
-    # Инициализация БД
     init_db()
     
-    # Создание приложения
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Обработчики команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("add_channel", add_channel_command))
     application.add_handler(CommandHandler("remove_channel", remove_channel_command))
     application.add_handler(CommandHandler("list_channels", list_channels_command))
-    
-    # Обработчик пересланных сообщений
     application.add_handler(MessageHandler(filters.FORWARDED & filters.ALL, handle_forwarded_message))
     
-    # Запуск бота
     application.run_polling()
 
 if __name__ == '__main__':
