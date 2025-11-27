@@ -1,3 +1,5 @@
+import patch
+from telegram import Update
 import os
 import logging
 import sqlite3
