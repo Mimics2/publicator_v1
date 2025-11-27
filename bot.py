@@ -2,7 +2,7 @@ import os
 import logging
 import sqlite3
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # Настройка логирования
 logging.basicConfig(
@@ -68,9 +68,9 @@ def remove_channel(channel_id):
     conn.commit()
     conn.close()
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def start(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    await update.message.reply_text(
+    update.message.reply_text(
         "🤖 Бот-публикатор готов к работе!\n\n"
         "Команды админа:\n"
         "/add_channel <ID_канала> - добавить канал\n"
@@ -79,84 +79,84 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Для публикации просто перешлите сообщение в этот чат!"
     )
 
-async def add_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def add_channel_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if user_id not in ADMINS:
-        await update.message.reply_text("❌ У вас нет прав для выполнения этой команды!")
+        update.message.reply_text("❌ У вас нет прав для выполнения этой команды!")
         return
     
     if not context.args:
-        await update.message.reply_text("❌ Используйте: /add_channel <ID_канала>")
+        update.message.reply_text("❌ Используйте: /add_channel <ID_канала>")
         return
     
     channel_id = context.args[0]
     
     try:
         bot = context.bot
-        chat = await bot.get_chat(channel_id)
+        chat = bot.get_chat(channel_id)
         
-        admins = await bot.get_chat_administrators(channel_id)
+        admins = bot.get_chat_administrators(channel_id)
         bot_is_admin = any(admin.user.id == bot.id for admin in admins)
         
         if not bot_is_admin:
-            await update.message.reply_text(
+            update.message.reply_text(
                 "❌ Бот не является администратором в этом канале!\n"
                 "Добавьте бота как администратора с правами на отправку сообщений."
             )
             return
         
         if add_channel(channel_id, chat.title, user_id):
-            await update.message.reply_text(f"✅ Канал '{chat.title}' успешно добавлен!")
+            update.message.reply_text(f"✅ Канал '{chat.title}' успешно добавлен!")
         else:
-            await update.message.reply_text("❌ Ошибка при добавлении канала!")
+            update.message.reply_text("❌ Ошибка при добавлении канала!")
             
     except Exception as e:
         logger.error(f"Error checking channel: {e}")
-        await update.message.reply_text("❌ Ошибка: неверный ID канала или бот не добавлен в канал!")
+        update.message.reply_text("❌ Ошибка: неверный ID канала или бот не добавлен в канал!")
 
-async def remove_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def remove_channel_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if user_id not in ADMINS:
-        await update.message.reply_text("❌ У вас нет прав для выполнения этой команды!")
+        update.message.reply_text("❌ У вас нет прав для выполнения этой команды!")
         return
     
     if not context.args:
-        await update.message.reply_text("❌ Используйте: /remove_channel <ID_канала>")
+        update.message.reply_text("❌ Используйте: /remove_channel <ID_канала>")
         return
     
     channel_id = context.args[0]
     remove_channel(channel_id)
-    await update.message.reply_text("✅ Канал удален из списка!")
+    update.message.reply_text("✅ Канал удален из списка!")
 
-async def list_channels_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def list_channels_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if user_id not in ADMINS:
-        await update.message.reply_text("❌ У вас нет прав для выполнения этой команды!")
+        update.message.reply_text("❌ У вас нет прав для выполнения этой команды!")
         return
     
     channels = get_channels()
     if not channels:
-        await update.message.reply_text("📭 Нет подключенных каналов!")
+        update.message.reply_text("📭 Нет подключенных каналов!")
         return
     
     message = "📋 Подключенные каналы:\n\n"
     for channel_id, channel_name in channels:
         message += f"• {channel_name}\nID: `{channel_id}`\n\n"
     
-    await update.message.reply_text(message, parse_mode='Markdown')
+    update.message.reply_text(message, parse_mode='Markdown')
 
-async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def handle_forwarded_message(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if user_id not in ADMINS:
-        await update.message.reply_text("❌ У вас нет прав для публикации!")
+        update.message.reply_text("❌ У вас нет прав для публикации!")
         return
     
     if not update.message or not update.message.forward_from_chat:
-        await update.message.reply_text("❌ Это не пересланное сообщение из канала!")
+        update.message.reply_text("❌ Это не пересланное сообщение из канала!")
         return
     
     original_chat = update.message.forward_from_chat
@@ -168,7 +168,7 @@ async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT
     
     for channel_id, channel_name in channels:
         try:
-            await context.bot.forward_message(
+            context.bot.forward_message(
                 chat_id=channel_id,
                 from_chat_id=original_chat.id,
                 message_id=message_id
@@ -180,7 +180,7 @@ async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT
             logger.error(f"Error forwarding to {channel_name}: {e}")
             failed += 1
     
-    await update.message.reply_text(
+    update.message.reply_text(
         f"📊 Результат публикации:\n"
         f"✅ Успешно: {successful}\n"
         f"❌ Ошибок: {failed}"
@@ -196,15 +196,23 @@ def main():
     
     init_db()
     
-    application = Application.builder().token(BOT_TOKEN).build()
+    # Создаем updater вместо application
+    updater = Updater(token=BOT_TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
     
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("add_channel", add_channel_command))
-    application.add_handler(CommandHandler("remove_channel", remove_channel_command))
-    application.add_handler(CommandHandler("list_channels", list_channels_command))
-    application.add_handler(MessageHandler(filters.FORWARDED & filters.ALL, handle_forwarded_message))
+    # Обработчики команд
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CommandHandler("add_channel", add_channel_command))
+    dispatcher.add_handler(CommandHandler("remove_channel", remove_channel_command))
+    dispatcher.add_handler(CommandHandler("list_channels", list_channels_command))
     
-    application.run_polling()
+    # Обработчик пересланных сообщений
+    dispatcher.add_handler(MessageHandler(Filters.forwarded & Filters.all, handle_forwarded_message))
+    
+    # Запуск бота
+    updater.start_polling()
+    logger.info("✅ Бот запущен и работает...")
+    updater.idle()
 
 if __name__ == '__main__':
     main()
